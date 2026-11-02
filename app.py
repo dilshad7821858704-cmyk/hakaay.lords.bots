@@ -1,179 +1,187 @@
-from flask import Flask, jsonify, request, render_template_string
-import threading
+import sys
+import random
 import time
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
+                             QHBoxLayout, QPushButton, QTabWidget, QCheckBox, 
+                             QComboBox, QSpinBox, QLabel, QTextEdit, QGroupBox, 
+                             QFormLayout)
+from PyQt6.QtCore import QThread, pyqtSignal, pyqtSlot
 
-app = Flask(__name__)
+class EngineWorker(QThread):
+    """
+    Handles processing simulation in a separate thread to prevent 
+    the graphical user interface from freezing during intensive loops.
+    """
+    log_signal = pyqtSignal(str, str) # Emits: (message, text_color_hex)
+    status_signal = pyqtSignal(str)
 
-# Complete backend configuration structure tracking toggles and sub-settings
-BOT_DATA = {
-    "bot_running": False,
-    "accounts": [{"igg_id": "123456789", "server": "1600", "status": "Connected"}],
-    "config": {
-        "protection": {"enabled": True, "always_open_shield": True, "open_shield_under_attack": True},
-        "cargo": {"enabled": True, "allow_trading": True},
-        "build": {"enabled": True, "max_build_level": 24},
-        "research": {"enabled": False, "auto_research": False},
-        "rally": {"enabled": True, "join_rallies": True},
-        "realm_gather": {"enabled": True},
-        "gather": {"enabled": True},
-        "gear": {"enabled": True, "auto_switch_gear": True},
-        "monster": {"enabled": True, "auto_hunting": True, "energy_percentage": 90},
-        "hero_stage": {"enabled": True, "auto_attack_stages": True},
-        "arena": {"enabled": True, "attack_arena": True, "collect_gems": True},
-        "guild": {"enabled": True, "send_guild_help": True},
-        "speed_up": {"enabled": True, "normal_speed_ups_for_building_only": True},
-        "troop": {"enabled": True, "auto_train_troops": True},
-        "supply": {"enabled": True, "player_to_send": "wow man 69"},
-        "familiars_and_pacts": {"enabled": True, "enable_pact_merging": True},
-        "guild_fest": {"enabled": True, "complete_missions": True},
-        "extravaganza": {"enabled": True, "auto_item_select": True},
-        "event_autoplay": {"enabled": True, "frost_commissions": True},
-        "arena_and_battlefield": {"enabled": True, "max_nest_level": 60},
-        "schedule": {"enabled": True, "enable_schedule": True}
-    }
-}
+    def __init__(self, config_data):
+        super().__init__()
+        self.config = config_data
+        self._is_running = True
 
-# Thread control event
-stop_event = threading.Event()
-
-def bot_worker_loop():
-    """Background task simulator reading BOT_DATA config live."""
-    print("[BOT ENGINE] Background Thread Started.")
-    while not stop_event.is_set():
-        if not BOT_DATA["bot_running"]:
-            time.sleep(1)
-            continue
-            
-        print("\n--- [BOT ENGINE] Running Automation Cycle ---")
-        config = BOT_DATA["config"]
+    def run(self):
+        self.status_signal.emit("RUNNING")
+        self.log_signal.emit("Engine lifecycle started successfully.", "#28a745")
         
-        # Check active status flags live from frontend variables
-        if config["protection"]["enabled"] and config["protection"]["always_open_shield"]:
-            print("[ACTION] Verification complete: Shield active.")
+        # Simulated action pool based on category parameter state
+        while self._is_running:
+            actions = ["Refreshing local cache records...", "Verifying internal data states..."]
             
-        if config["monster"]["enabled"] and config["monster"]["auto_hunting"]:
-            thresh = config["monster"]["energy_percentage"]
-            print(f"[ACTION] Searching monsters (Energy threshold target: >={thresh}%)")
-            
-        if config["build"]["enabled"]:
-            max_lvl = config["build"]["max_build_level"]
-            print(f"[ACTION] Upgrading production buildings up to Level {max_lvl}")
-            
-        if config["supply"]["enabled"]:
-            target_player = config["supply"]["player_to_send"]
-            print(f"[ACTION] Shipping resources to vault target account: {target_player}")
+            if self.config.get('auto_resource'):
+                actions.append(f"Analyzing production optimization for: {self.config['focus'].upper()}")
+            if self.config.get('auto_train'):
+                actions.append(f"Evaluating queue requirements against threshold: {self.config['shelter_min']}")
+            if self.config.get('guild_quests'):
+                actions.append("Scanning available validation logs for guild events.")
 
-        # Sleep interval before repeating automation cycle
-        time.sleep(5)
-    print("[BOT ENGINE] Background Thread Safely Closed.")
+            chosen_action = random.choice(actions)
+            self.log_signal.emit(chosen_action, "#ffffff")
+            
+            # Context-switch delay simulating operational cycles
+            time.sleep(2.5)
 
-HTML_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lords Mobile Web Bot - 21 Categories</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; padding: 15px; margin: 0; }
-        .container { max-width: 600px; margin: auto; background: #1e293b; padding: 20px; border-radius: 10px; }
-        h1 { text-align: center; color: #38bdf8; font-size: 20px; }
-        .status { background: #0f172a; padding: 10px; border-radius: 6px; border-left: 4px solid #ef4444; margin-bottom: 15px; font-family: monospace; font-size: 13px; transition: border 0.3s; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-bottom: 10px; font-size: 15px; }
-        .btn-start { background: #22c55e; color: white; }
-        .btn-stop { background: #ef4444; color: white; }
-        .btn-save { background: #38bdf8; color: #0f172a; margin-top: 15px; }
-        .section { background: #334155; padding: 12px; border-radius: 6px; margin-top: 15px; }
-        h3 { margin-top: 0; color: #cbd5e1; font-size: 15px; border-bottom: 1px solid #475569; padding-bottom: 5px; }
-        label { display: block; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
-        .sub-settings { background: #1e293b; padding: 10px; border-radius: 6px; margin-top: 5px; margin-bottom: 12px; padding-left: 15px; border-left: 2px solid #475569; }
-        .sub-settings label { margin-bottom: 6px; color: #94a3b8; }
-        input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 6px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 4px; margin-top: 4px; margin-bottom: 10px; box-sizing: border-box; }
-        .sub-settings input[type="text"], .sub-settings input[type="number"] { width: auto; display: inline-block; padding: 4px; margin-bottom: 0; margin-left: 5px; }
-        .acc-card { background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 3px solid #38bdf8; font-size: 13px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Lords Mobile Web Bot</h1>
-        <div class="status" id="status-msg">STOPPED | Automated tasks offline.</div>
+    def stop(self):
+        self._is_running = False
+        self.status_signal.emit("STOPPING")
+        self.log_signal.emit("Termination request received. Cleaning up worker processes...", "#ffc107")
+        self.wait() # Ensure thread closes cleanly
+        self.status_signal.emit("IDLE")
+
+
+class DashboardWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Advanced Simulation Dashboard Architecture")
+        self.resize(750, 550)
+        self.worker = None
         
-        <div class="section">
-            <h3>Connect IGG Account</h3>
-            <label>IGG ID / Username: <input type="text" id="igg_id" placeholder="Enter IGG ID"></label>
-            <label>IGG Password / Token: <input type="password" id="igg_pass" placeholder="Enter password"></label>
-            <label>Server / Kingdom: <input type="text" id="igg_server" placeholder="e.g. 1600"></label>
-            <button class="btn btn-save" onclick="addAccount()">CONNECT ACCOUNT</button>
-        </div>
+        # Root layout structure
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+        
+        self.init_control_panel()
+        self.init_parameter_tabs()
+        self.init_log_panel()
 
-        <div class="section">
-            <h3>Connected Accounts</h3>
-            <div id="acc-list">Loading...</div>
-        </div>
+    def init_control_panel(self):
+        """Creates the primary action layout and status displays."""
+        group = QGroupBox("System Lifecycles")
+        layout = QHBoxLayout()
 
-        <div class="section">
-            <h3>All 21 Categories Settings</h3>
-            <form id="config-form">
-                
-                <label><input type="checkbox" name="protection.enabled"> 1. Protection</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="protection.always_open_shield"> Always Open Shield</label>
-                    <label><input type="checkbox" name="protection.open_shield_under_attack"> Open Shield Under Attack</label>
-                </div>
+        self.start_btn = QPushButton("START LIFE CYCLE")
+        self.start_btn.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 8px;")
+        self.start_btn.clicked.connect(self.handle_start)
 
-                <label><input type="checkbox" name="cargo.enabled"> 2. Cargo</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="cargo.allow_trading"> Allow Trading</label>
-                </div>
+        self.stop_btn = QPushButton("STOP LIFE CYCLE")
+        self.stop_btn.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 8px;")
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self.handle_stop)
 
-                <label><input type="checkbox" name="build.enabled"> 3. Build</label>
-                <div class="sub-settings">
-                    <label>Max Build Level: <input type="number" name="build.max_build_level" min="1" max="25"></label>
-                </div>
+        self.status_label = QLabel("STATUS: IDLE")
+        self.status_label.setStyleSheet("font-weight: bold; color: #dc3545; font-size: 14px; margin-left: 15px;")
 
-                <label><input type="checkbox" name="research.enabled"> 4. Research</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="research.auto_research"> Auto Research</label>
-                </div>
+        layout.addWidget(self.start_btn)
+        layout.addWidget(self.stop_btn)
+        layout.addWidget(self.status_label)
+        layout.addStretch()
+        group.setLayout(layout)
+        self.main_layout.addWidget(group)
 
-                <label><input type="checkbox" name="rally.enabled"> 5. Rally</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="rally.join_rallies"> Join Rallies</label>
-                </div>
+    def init_parameter_tabs(self):
+        """Constructs multi-category tabs to separate feature parameters."""
+        self.tabs = QTabWidget()
+        
+        # Category 1: Economy Elements
+        self.tab_econ = QWidget()
+        econ_layout = QFormLayout(self.tab_econ)
+        self.chk_resource = QCheckBox("Enable Resource Optimization Loop")
+        self.chk_resource.setChecked(True)
+        self.cmb_focus = QComboBox()
+        self.cmb_focus.addItems(["Food Focus", "Stone Focus", "Wood Focus", "Ore Focus"])
+        econ_layout.addRow(self.chk_resource)
+        econ_layout.addRow("Primary Production Target:", self.cmb_focus)
+        
+        # Category 2: Military Elements
+        self.tab_mili = QWidget()
+        mili_layout = QFormLayout(self.tab_mili)
+        self.chk_train = QCheckBox("Enable Background Force Metrics")
+        self.spin_shelter = QSpinBox()
+        self.spin_shelter.setRange(0, 500000)
+        self.spin_shelter.setValue(5000)
+        mili_layout.addRow(self.chk_train)
+        mili_layout.addRow("Minimum Core Reserve Limit:", self.spin_shelter)
 
-                <label><input type="checkbox" name="realm_gather.enabled"> 6. Realm Gather</label>
-                <label><input type="checkbox" name="gather.enabled"> 7. Gather</label>
-                <label><input type="checkbox" name="gear.enabled"> 8. Gear</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="gear.auto_switch_gear"> Auto Switch Gear</label>
-                </div>
+        # Category 3: Administrative Elements
+        self.tab_admin = QWidget()
+        admin_layout = QVBoxLayout(self.tab_admin)
+        self.chk_guild = QCheckBox("Process Local Guild Record Synchronization")
+        self.chk_guild.setChecked(True)
+        self.chk_quest = QCheckBox("Process Periodic Daily Admin Evaluation Requests")
+        admin_layout.addWidget(self.chk_guild)
+        admin_layout.addWidget(self.chk_quest)
+        admin_layout.addStretch()
 
-                <label><input type="checkbox" name="monster.enabled"> 9. Monster Hunting</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="monster.auto_hunting"> Auto Hunting</label>
-                    <label>Energy Threshold %: <input type="number" name="monster.energy_percentage" min="0" max="100"></label>
-                </div>
+        self.tabs.addTab(self.tab_econ, "Economy & Processing")
+        self.tabs.addTab(self.tab_mili, "Military Systems")
+        self.tabs.addTab(self.tab_admin, "Administrative / Quests")
+        self.main_layout.addWidget(self.tabs)
 
-                <label><input type="checkbox" name="hero_stage.enabled"> 10. Hero Stages</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="hero_stage.auto_attack_stages"> Auto Attack Stages</label>
-                </div>
+    def init_log_panel(self):
+        """Creates the runtime telemetry viewing field."""
+        group = QGroupBox("Live Activity Log (Telemetry)")
+        layout = QVBoxLayout()
+        
+        self.log_view = QTextEdit()
+        self.log_view.setReadOnly(True)
+        self.log_view.setStyleSheet("background-color: #111116; color: #00ff00; font-family: 'Courier New';")
+        
+        layout.addWidget(self.log_view)
+        group.setLayout(layout)
+        self.main_layout.addWidget(group)
 
-                <label><input type="checkbox" name="arena.enabled"> 11. Arena</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="arena.attack_arena"> Attack Arena</label>
-                    <label><input type="checkbox" name="arena.collect_gems"> Collect Gems</label>
-                </div>
+    @pyqtSlot(str, str)
+    def update_log_view(self, text, color_hex):
+        timestamp = time.strftime("%H:%M:%S")
+        formatted_message = f'<span style="color:#888888;">[{timestamp}]</span> <span style="color:{color_hex};">{text}</span>'
+        self.log_view.append(formatted_message)
 
-                <label><input type="checkbox" name="guild.enabled"> 12. Guild Help</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="guild.send_guild_help"> Send Guild Help</label>
-                </div>
+    @pyqtSlot(str)
+    def update_status(self, status_text):
+        self.status_label.setText(f"STATUS: {status_text}")
+        if status_text == "RUNNING":
+            self.status_label.setStyleSheet("font-weight: bold; color: #28a745; font-size: 14px; margin-left: 15px;")
+        elif status_text == "IDLE":
+            self.status_label.setStyleSheet("font-weight: bold; color: #dc3545; font-size: 14px; margin-left: 15px;")
 
-                <label><input type="checkbox" name="speed_up.enabled"> 13. Speed Ups</label>
-                <div class="sub-settings">
-                    <label><input type="checkbox" name="speed_up.normal_speed_ups_for_building_only"> Building Only</label>
-                </div>
+    def handle_start(self):
+        # Package UI configurations into state object
+        runtime_config = {
+            'auto_resource': self.chk_resource.isChecked(),
+            'focus': self.cmb_focus.currentText(),
+            'auto_train': self.chk_train.isChecked(),
+            'shelter_min': self.spin_shelter.value(),
+            'guild_quests': self.chk_guild.isChecked()
+        }
+        
+        self.start_btn.setEnabled(False)
+        self.stop_btn.setEnabled(True)
+        
+        # Instantiate worker thread safe-lifecycle execution
+        self.worker = EngineWorker(runtime_config)
+        self.worker.log_signal.connect(self.update_log_view)
+        self.worker.status_signal.connect(self.update_status)
+        self.worker.start()
 
-                <label><input type="checkbox" name="troop.enabled"> 14. Troops</label>
-                <div class="sub-settings">
+    def handle_stop(self):
+        if self.worker and self.worker.isRunning():
+            self.worker.stop()
+            self.start_btn.setEnabled(True)
+            self.stop_btn.setEnabled(False)
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = DashboardWindow()
+    window.show()
+    sys.exit(app.exec())
