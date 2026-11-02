@@ -2,17 +2,10 @@ from flask import Flask, jsonify, request, render_template_string
 
 app = Flask(__name__)
 
-# Bot Configuration + Accounts Storage
 BOT_DATA = {
     "accounts": [
-        {"email": "myaccount@gmail.com", "server": "Kingdom 123", "status": "Active"}
-    ],
-    "config": {
-        "protection": {"always_open_shield": True},
-        "gather": {"enable": True},
-        "monster": {"auto_hunting": True},
-        "schedule": {"enable_schedule": True}
-    }
+        {"igg_id": "123456789", "server": "1600", "status": "Active"}
+    ]
 }
 
 HTML_PAGE = """
@@ -21,7 +14,7 @@ HTML_PAGE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lords Mobile Web Bot - Accounts & Control Panel</title>
+    <title>Lords Mobile Web Bot - IGG Connect</title>
     <style>
         body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; padding: 15px; margin: 0; }
         .container { max-width: 600px; margin: auto; background: #1e293b; padding: 20px; border-radius: 10px; }
@@ -34,27 +27,28 @@ HTML_PAGE = """
         .section { background: #334155; padding: 12px; border-radius: 6px; margin-top: 15px; }
         h3 { margin-top: 0; color: #cbd5e1; font-size: 15px; border-bottom: 1px solid #475569; padding-bottom: 5px; }
         label { display: block; margin-bottom: 8px; font-size: 13px; cursor: pointer; }
-        input[type="text"] { width: 100%; padding: 6px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 4px; margin-top: 4px; margin-bottom: 10px; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 6px; background: #0f172a; border: 1px solid #475569; color: #fff; border-radius: 4px; margin-top: 4px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Lords Mobile Web Bot</h1>
-        <div class="status" id="status-msg">RUNNING | Ready for Accounts.</div>
+        <div class="status" id="status-msg">READY | Connect to IGG.</div>
         
         <div class="section">
-            <h3>Add Game Account</h3>
-            <label>Game Email / ID: <input type="text" id="acc_email" placeholder="Enter account email"></label>
-            <label>Server / Kingdom: <input type="text" id="acc_server" placeholder="e.g. K500"></label>
-            <button class="btn btn-save" onclick="addAccount()">ADD ACCOUNT</button>
+            <h3>Connect IGG Account</h3>
+            <label>IGG ID / Username: <input type="text" id="igg_id" placeholder="Enter IGG ID"></label>
+            <label>IGG Password / Token: <input type="password" id="igg_pass" placeholder="Enter password"></label>
+            <label>Server / Kingdom: <input type="text" id="igg_server" placeholder="e.g. 1600"></label>
+            <button class="btn btn-save" onclick="addAccount()">CONNECT TO IGG</button>
         </div>
 
         <div class="section">
-            <h3>Configured Accounts</h3>
+            <h3>Connected Accounts</h3>
             <pre id="acc-list" style="background: #0f172a; padding: 10px; border-radius: 4px; color: #38bdf8; font-size: 12px;">Loading...</pre>
         </div>
 
-        <button class="btn btn-start" onclick="alert('Bot started for active accounts!')">START BOT 24/7</button>
+        <button class="btn btn-start" onclick="alert('Bot started for connected IGG accounts!')">START BOT 24/7</button>
         <button class="btn btn-stop" onclick="alert('Bot stopped.')">STOP BOT</button>
     </div>
 
@@ -68,17 +62,17 @@ HTML_PAGE = """
         }
 
         function addAccount() {
-            const email = document.getElementById('acc_email').value;
-            const server = document.getElementById('acc_server').value;
+            const igg_id = document.getElementById('igg_id').value;
+            const server = document.getElementById('igg_server').value;
             
             fetch('/api/accounts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email, server: server })
+                body: JSON.stringify({ igg_id: igg_id, server: server })
             })
             .then(res => res.json())
             .then(response => {
-                document.getElementById('status-msg').innerText = "SUCCESS | Account Added!";
+                document.getElementById('status-msg').innerText = "SUCCESS | Connected to IGG!";
                 loadAccounts();
             });
         }
@@ -100,14 +94,14 @@ def get_accounts():
 @app.route("/api/accounts", methods=["POST"])
 def add_account():
     new_acc = request.json
-    if new_acc and new_acc.get("email"):
+    if new_acc and new_acc.get("igg_id"):
         BOT_DATA["accounts"].append({
-            "email": new_acc.get("email"),
+            "igg_id": new_acc.get("igg_id"),
             "server": new_acc.get("server", "Unknown"),
-            "status": "Idle"
+            "status": "Connected to IGG"
         })
-        return jsonify({"status": "success", "message": "Account added successfully!"})
-    return jsonify({"status": "error", "message": "Invalid data"}), 400
+        return jsonify({"status": "success", "message": "Connected successfully!"})
+    return jsonify({"status": "error"}), 400
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
