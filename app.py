@@ -1,128 +1,134 @@
-import os
-import time
-import threading
-import subprocess
+import os, time, threading, subprocess
 from flask import Flask, render_template_string, request, jsonify
 
 app = Flask(__name__)
 
-# Bot State & Settings
 bot_state = {
     "running": False,
     "auto_help": False,
     "auto_shield": False,
     "auto_mystery_box": False,
     "last_action": "Bot is idle. Waiting for command...",
-    "shield_interval_hours": 24,
     "last_shield_time": 0
 }
 
-# Standard 1280x720 Android Screen Coordinates for Lords Mobile
 COORDS = {
-    "help_button": (1190, 560),      # Bottom-right Guild Help icon
-    "mystery_box": (1110, 620),      # Bottom-right Mystery Box icon
-    "turf_boosts": (1220, 210),      # Right-side Turf Boost button
-    "shield_tab": (900, 200),        # Shield category inside Turf Boost
-    "use_shield": (1050, 380),       # "Use" button on 24h Shield
-    "confirm_btn": (640, 450)        # Confirm popup button
+    "help": (1190, 560),
+    "box": (1110, 620),
+    "boosts": (1220, 210),
+    "shield_tab": (900, 200),
+    "use_shield": (1050, 380),
+    "confirm": (640, 450)
 }
 
 def adb_tap(x, y, label=""):
-    """Sends a screen tap command to the Android game container."""
     try:
         subprocess.run(["adb", "shell", "input", "tap", str(x), str(y)], check=False)
-        bot_state["last_action"] = f"Tapped {label} at ({x}, {y}) - {time.strftime('%H:%M:%S')}"
+        bot_state["last_action"] = f"Tapped {label} ({x},{y}) at {time.strftime('%H:%M:%S')}"
     except Exception:
-        bot_state["last_action"] = f"[Simulated Tap] {label} at ({x}, {y}) - {time.strftime('%H:%M:%S')}"
+        bot_state["last_action"] = f"[Simulated] {label} ({x},{y}) at {time.strftime('%H:%M:%S')}"
 
 def bot_worker():
-    """24/7 Background loop that runs while the bot is turned ON."""
     while True:
         if bot_state["running"]:
             now = time.time()
-
-            # 1. Auto Guild Help
             if bot_state["auto_help"]:
-                x, y = COORDS["help_button"]
-                adb_tap(x, y, "Guild Help")
+                adb_tap(*COORDS["help"], "Guild Help")
                 time.sleep(2)
-
-            # 2. Auto Mystery Box
             if bot_state["auto_mystery_box"]:
-                x, y = COORDS["mystery_box"]
-                adb_tap(x, y, "Mystery Box")
+                adb_tap(*COORDS["box"], "Mystery Box")
                 time.sleep(2)
-
-            # 3. Auto Shield Timer Check
-            if bot_state["auto_shield"]:
-                hours_passed = (now - bot_state["last_shield_time"]) / 3600
-                if hours_passed >= (bot_state["shield_interval_hours"] - 0.2):
-                    adb_tap(*COORDS["turf_boosts"], "Open Turf Boosts")
-                    time.sleep(2)
-                    adb_tap(*COORDS["shield_tab"], "Select Shield Tab")
-                    time.sleep(2)
-                    adb_tap(*COORDS["use_shield"], "Use Shield")
-                    time.sleep(2)
-                    adb_tap(*COORDS["confirm_btn"], "Confirm Overwrite Shield")
-                    bot_state["last_shield_time"] = now
-
+            if bot_state["auto_shield"] and (now - bot_state["last_shield_time"]) >= 85600:
+                adb_tap(*COORDS["boosts"], "Turf Boosts")
+                time.sleep(2)
+                adb_tap(*COORDS["shield_tab"], "Shield Tab")
+                time.sleep(2)
+                adb_tap(*COORDS["use_shield"], "Use 24h Shield")
+                time.sleep(2)
+                adb_tap(*COORDS["confirm"], "Confirm Shield")
+                bot_state["last_shield_time"] = now
         time.sleep(5)
 
-# Start background thread
 threading.Thread(target=bot_worker, daemon=True).start()
 
-# Webpage HTML Template
-HTML_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
+HTML_PAGE = '''<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lords Mobile Cloud Bot Panel</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 15px; }
-        .card { background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        h2 { margin-top: 0; color: #38bdf8; font-size: 20px; }
-        .status-box { background: #0f172a; padding: 12px; border-radius: 8px; font-family: monospace; color: #4ade80; margin-bottom: 12px; font-size: 13px; }
-        .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; margin-top: 8px; cursor: pointer; }
-        .btn-start { background: #22c55e; color: #fff; }
-        .btn-stop { background: #ef4444; color: #fff; }
-        .btn-action { background: #3b82f6; color: #fff; }
-        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #334155; }
-        input[type="number"], input[type="text"] { width: 100%; padding: 10px; margin-top: 6px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; box-sizing: border-box; }
-    </style>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lords Web Bot</title>
+<style>
+body{font-family:sans-serif;background:#0f172a;color:#fff;padding:15px;margin:0}
+.card{background:#1e293b;padding:15px;border-radius:10px;margin-bottom:15px}
+.stat{background:#0f172a;padding:10px;border-radius:6px;color:#4ade80;font-family:monospace;margin-bottom:10px}
+button{width:100%;padding:12px;border:none;border-radius:8px;font-weight:bold;color:#fff;margin-top:8px}
+.on{background:#22c55e}.off{background:#ef4444}.act{background:#3b82f6}
+.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155}
+input[type=number]{width:48%;padding:8px;background:#0f172a;color:#fff;border:1px solid #475569;border-radius:6px}
+</style>
 </head>
 <body>
+<div class="card">
+<h3>Lords Mobile Web Bot</h3>
+<div class="stat" id="st">Loading...</div>
+<button class="on" onclick="up({running:true})">START BOT 24/7</button>
+<button class="off" onclick="up({running:false})">STOP BOT</button>
+</div>
+<div class="card">
+<div class="row"><span>Auto Guild Help</span><input type="checkbox" id="h" onchange="sv()"></div>
+<div class="row"><span>Auto Mystery Box</span><input type="checkbox" id="m" onchange="sv()"></div>
+<div class="row"><span>Auto 24h Shield</span><input type="checkbox" id="s" onchange="sv()"></div>
+<button class="act" onclick="sh()">Trigger Shield Now</button>
+</div>
+<div class="card">
+<input type="number" id="tx" placeholder="X (e.g. 1190)">
+<input type="number" id="ty" placeholder="Y (e.g. 560)">
+<button class="act" onclick="tp()">Tap Screen Coordinate</button>
+</div>
+<script>
+async function load(){
+let r=await fetch('/api/status'),d=await r.json();
+document.getElementById('st').innerText=(d.running?"RUNNING | ":"STOPPED | ")+d.last_action;
+document.getElementById('h').checked=d.auto_help;
+document.getElementById('m').checked=d.auto_mystery_box;
+document.getElementById('s').checked=d.auto_shield;
+}
+async function up(b){await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});load();}
+function sv(){up({auto_help:document.getElementById('h').checked,auto_mystery_box:document.getElementById('m').checked,auto_shield:document.getElementById('s').checked});}
+async function sh(){await fetch('/api/shield_now',{method:'POST'});load();}
+async function tp(){await fetch('/api/tap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:Number(document.getElementById('tx').value||640),y:Number(document.getElementById('ty').value||360)})});load();}
+setInterval(load,3000);load();
+</script>
+</body>
+</html>'''
 
-    <div class="card">
-        <h2>⚔️ Lords Mobile Web Bot</h2>
-        <div class="status-box" id="statusText">Loading status...</div>
-        <button class="btn btn-start" onclick="toggleBot(true)">▶ START BOT 24/7</button>
-        <button class="btn btn-stop" onclick="toggleBot(false)">⏹ STOP BOT</button>
-    </div>
+@app.route("/")
+def index():
+    return render_template_string(HTML_PAGE)
 
-    <div class="card">
-        <h2>⚙️ Auto Features</h2>
-        <div class="toggle-row">
-            <span>Auto Guild Help</span>
-            <input type="checkbox" id="auto_help" onchange="saveSettings()">
-        </div>
-        <div class="toggle-row">
-            <span>Auto Mystery Box</span>
-            <input type="checkbox" id="auto_mystery_box" onchange="saveSettings()">
-        </div>
-        <div class="toggle-row">
-            <span>Auto 24h Shield Renewal</span>
-            <input type="checkbox" id="auto_shield" onchange="saveSettings()">
-        </div>
-        <button class="btn btn-action" onclick="instantShield()">🛡️ Trigger Shield Right Now</button>
-    </div>
+@app.route("/api/status")
+def status():
+    return jsonify(bot_state)
 
-    <div class="card">
-        <h2>🎯 Custom Screen Tap / Coordinate Test</h2>
-        <input type="number" id="tapX" placeholder="Screen X (e.g. 1190)">
-        <input type="number" id="tapY" placeholder="Screen Y (e.g. 560)">
-        <button class="btn btn-action" onclick="customTap()">Tap Screen Coordinate</button>
-    </div>
+@app.route("/api/update", methods=["POST"])
+def update():
+    data = request.json or {}
+    for k in ["running", "auto_help", "auto_shield", "auto_mystery_box"]:
+        if k in data:
+            bot_state[k] = bool(data[k])
+    return jsonify({"ok": True})
 
-    <script>
+@app.route("/api/shield_now", methods=["POST"])
+def shield_now():
+    bot_state["last_shield_time"] = 0
+    bot_state["auto_shield"] = True
+    bot_state["running"] = True
+    return jsonify({"ok": True})
+
+@app.route("/api/tap", methods=["POST"])
+def tap():
+    data = request.json or {}
+    adb_tap(data.get("x", 640), data.get("y", 360), "Custom Tap")
+    return jsonify({"ok": True})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
