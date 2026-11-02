@@ -1,134 +1,239 @@
-import os, time, threading, subprocess
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-bot_state = {
-    "running": False,
-    "auto_help": False,
-    "auto_shield": False,
-    "auto_mystery_box": False,
-    "last_action": "Bot is idle. Waiting for command...",
-    "last_shield_time": 0
+# Aapki poori bot configuration jo screenshots se li gayi hai
+BOT_CONFIG = {
+    "protection": {
+        "always_open_shield": True,
+        "open_shield_under_attack": True,
+        "open_shield_scouted": True,
+        "open_shield_rallied": True,
+        "always_anti_scout": True,
+        "anti_scout_when_scouted": False,
+        "preferred_shield": "8 hour",
+        "dont_shield_with_prisoner": True,
+        "auto_execute": False,
+    },
+    "cargo": {
+        "allow_trading": True,
+        "trade_resources": {"food": True, "stone": True, "wood": True, "ore": True, "gold": True},
+        "ignore": {"food": False, "stone": False, "wood": False, "ore": False, "gold": False, "anima": False, "lunite": False, "speed_up": False},
+        "exchange_rss_item_only": False,
+        "use_rss_from_bag": True,
+    },
+    "build": {
+        "auto_build": False,
+        "auto_upgrade": False,
+        "build_by_lowest_level": False,
+        "ignore_spam_target": False,
+        "auto_buy_second_queue": False,
+        "second_queue_spam_only": False,
+        "building_priority": "Trading Post",
+        "max_build_level": 24,
+    },
+    "research": {
+        "auto_research": False,
+        "categories_priority": {
+            "economy": False, "defense": False, "military": False, "monster_hunt": False,
+            "upgrade_defense": False, "upgrade_military": False, "army_leadership": False,
+            "military_command": False, "familiars": False, "sigils": False,
+            "wonder_battles": False, "familiar_battles": False, "gear": False,
+            "advance_wonder_battles": False, "mana_awakening": False, "guild_duel": True
+        }
+    },
+    "rally": {
+        "join_rallies": True,
+        "no_t5_troops": True,
+        "dont_join_if_lab_full": True,
+        "dont_fill_rally": True,
+        "no_siege_troops": True,
+        "troop_type": "Send 1 Troop",
+        "one_troop_type_only": False,
+        "add_buffers": False,
+        "levels_to_attack": [5, 6],
+        "join_expedition_rallies": False,
+    },
+    "realm_gather": {
+        "enable": True,
+        "resources": {"food": False, "stone": False, "wood": False, "ore": False, "gold": False, "lunite": True},
+        "high_tier_gathering": True,
+        "leave_spare_army": False,
+        "spare_army_amount": 1,
+        "max_armies_to_send": 0,
+    },
+    "gather": {
+        "enable": True,
+        "use_high_tier_troops": False,
+        "resources": {"food": False, "stone": False, "wood": False, "ore": False, "gold": False, "gems": True},
+        "levels": [1, 2, 3, 4, 5, 6],
+        "leave_spare_army": True,
+        "recall_camps": False,
+        "spare_army_amount": 1,
+        "schedule": {"only_gather_between": True, "start": "12:01 PM", "end": "11:00 PM", "timezone": "IST (UTC+05:30)"},
+        "auto_kvk": {"rival_kingdom": False, "go_back_after_return": False, "buy_random_relocator": False, "recall_minutes_before": 10},
+        "troop_management": {"under_attack": True, "scouted": True, "on_conflict": True, "regather_wait_time_minutes": 5},
+    },
+    "gear": {
+        "auto_switch_gear": True,
+        "idle_gear_set": None,
+    },
+    "monster": {
+        "auto_hunting": True,
+        "combo_prediction": True,
+        "allow_saberfang": False,
+        "use_boots": False,
+        "use_energy_from_bag": False,
+        "avoid_conflict": False,
+        "avoid_guild_conflict": False,
+        "stop_after_1_kill": True,
+        "energy_percentage": 90,
+        "hunt_mode": "Any",
+        "max_walk_time_seconds": 60,
+        "daily_kill_target": 0,
+        "hunt_levels": [2],
+        "monsters_to_hunt": "all_selected",
+        "hero_type": "Auto Selected",
+    },
+    "hero_stage": {
+        "auto_hire_heroes": True,
+        "auto_upgrade_heroes": True,
+        "auto_enhance_heroes": True,
+        "use_level_up_items": True,
+        "revive_dead_leader": True,
+        "auto_attack_stages": True,
+        "priority_mode": True,
+        "attack_stage_type": "Custom Chapter",
+        "custom_chapter": {"chapter": "Chapter 6", "stage_type": "Elite", "stage": "6-3", "sweep": True, "x10_sweep": True},
+        "heroic_saga": {"send_heroes": False, "free_refreshes": True, "compasses_to_refresh": False, "grade": 0, "keep_compasses": 0},
+    },
+    "arena": {
+        "attack_arena": True,
+        "collect_gems": True,
+        "attack_guildmates": False,
+        "hero_type": "Auto Selected",
+        "auto_army_colloseum": {"auto_challenge": False, "deploy_best_teams": True, "max_opponent_strength_pct": 90},
+        "max_list_refreshes": 3,
+        "use_all_entries_before_reset_min": 60,
+        "buy_entries_with_gems": False,
+        "max_gems_per_purchase": 100,
+        "max_purchases_per_day": 1,
+    },
+    "guild": {
+        "send_guild_help": True,
+        "help_check_delay": 30,
+        "join_showdown": True,
+        "recall_armies_before_registering": False,
+        "update_lineup_minutes_before_close": 0,
+        "showdown_gear_set": "Current gear",
+    },
+    "speed_up": {
+        "use_speed_ups": False,
+        "normal_speed_ups_for_building_only": True,
+        "auto_speed_ups": {
+            "building": False, "research": False, "training": False, "healing": False,
+            "merging": False, "trap": False, "trap_repair": False, "lunar_gear": False,
+            "gear": False, "wall": False
+        }
+    },
+    "troop": {
+        "auto_train_troops": True,
+        "auto_heal_troops": False,
+        "auto_heal_sanctuary": False,
+        "auto_craft_lunar": True,
+        "training_levels": {"infantry": [0]*4, "ranged": [0]*4, "cavalry": [0]*4, "siege": [0]*4},
+    },
+    "supply": {
+        "enable_resource_sending": False,
+        "player_to_send": "wow man 69",
+        "use_speed_gear": False,
+        "supply_speed": 3,
+        "max_travel_time_seconds": 600,
+        "resources": {
+            "food": {"send": False, "reserved": 1000000, "min_to_send": 3000000},
+            "stone": {"send": False, "reserved": 1000000, "min_to_send": 3000000},
+            "wood": {"send": False, "reserved": 10000000, "min_to_send": 30000000},
+            "ore": {"send": True, "reserved": 1000000, "min_to_send": 30000000},
+            "gold": {"send": True, "reserved": 1000000, "min_to_send": 3000000},
+        }
+    },
+    "familiars_and_pacts": {
+        "merge_skill_stones": False,
+        "skill_stones_type": "none",
+        "skill_stones_limit": 0,
+        "enable_pact_merging": True,
+        "pact_types_allow_merge": {"pact_1a": False, "pact_1b": False, "pact_2a": False, "pact_2b": False, "pact_3": False, "pact_4": True},
+        "active_familiars": ["Aquarius", "Bonehead", "Evil Weevil", "Gemming Gremlin", "Goblin", "Harpy", "Hell Drider", "Hoarder", "Saberfang", "SnowBeast", "Sorcerer", "Tempersite", "Territe", "Totempest", "Trickster"]
+    },
+    "guild_fest": {
+        "complete_missions": True,
+        "solo_first": True,
+        "send_mail_after_task": False,
+        "completed_missions_guild": {
+            "gather_resources": {"enabled": True, "min_points": 150, "max_points": 356},
+            "get_lv19_dark_essences": {"enabled": True, "min_points": 150, "max_points": 356},
+        },
+        "remove_missions": {
+            "enable": True,
+            "remove_duplicates": False,
+            "remove_delay_seconds": 3,
+            "guild_remove_all_selected": True,
+            "min_points": 130,
+            "max_points": 355
+        }
+    },
+    "extravaganza": {
+        "enable_exchange": False,
+        "auto_item_select": True,
+        "filter_mission": False,
+        "mission_filter_settings": {"min_points": 1, "max_points": 255}
+    },
+    "event_autoplay": {
+        "frost_commissions": {"play": True, "collect_rewards": True},
+        "racing": {"play": True, "collect_rewards": True},
+        "pinball": {"play": True, "collect_rewards": True},
+        "hell_event": {
+            "auto_hell_event": False,
+            "target_phase": 3,
+            "use_speed_ups": False,
+            "medal_heroes": "none",
+            "kinds_to_play": {"train": True, "research": True, "build": True, "pacts": True, "traps": False, "hunt": True}
+        }
+    },
+    "arena_and_battlefield": {
+        "chaos_arena": {"auto_enter": False, "auto_complete_missions": True},
+        "solo_battlefield": {
+            "auto_enter": False, "claim_rewards": False, "claim_achievements": False,
+            "auto_alchemy": False, "skip_alchemy_when_overheated": True, "help_guild_alchemy": False,
+            "auto_research": False, "research_mode": "Best for nests", "attack_insecticon_nests": False,
+            "max_nest_level": 60, "max_wounded_pct": 30, "leave_at_wounded_pct": 0
+        }
+    },
+    "schedule": {
+        "enable_schedule": True,
+        "timezone": "IST (UTC+05:30)",
+        "go_offline_between": {"start": "02:00 AM", "end": "08:00 AM"},
+        "recall_armies": True,
+        "monitor_shield": True,
+        "monitor_anti_scout": False,
+        "monitor_shelter": False,
+        "randomize_schedule": True,
+        "random_max_minutes": 30,
+    }
 }
 
-COORDS = {
-    "help": (1190, 560),
-    "box": (1110, 620),
-    "boosts": (1220, 210),
-    "shield_tab": (900, 200),
-    "use_shield": (1050, 380),
-    "confirm": (640, 450)
-}
+@app.route("/api/config", methods=["GET"])
+def get_config():
+    return jsonify(BOT_CONFIG)
 
-def adb_tap(x, y, label=""):
-    try:
-        subprocess.run(["adb", "shell", "input", "tap", str(x), str(y)], check=False)
-        bot_state["last_action"] = f"Tapped {label} ({x},{y}) at {time.strftime('%H:%M:%S')}"
-    except Exception:
-        bot_state["last_action"] = f"[Simulated] {label} ({x},{y}) at {time.strftime('%H:%M:%S')}"
-
-def bot_worker():
-    while True:
-        if bot_state["running"]:
-            now = time.time()
-            if bot_state["auto_help"]:
-                adb_tap(*COORDS["help"], "Guild Help")
-                time.sleep(2)
-            if bot_state["auto_mystery_box"]:
-                adb_tap(*COORDS["box"], "Mystery Box")
-                time.sleep(2)
-            if bot_state["auto_shield"] and (now - bot_state["last_shield_time"]) >= 85600:
-                adb_tap(*COORDS["boosts"], "Turf Boosts")
-                time.sleep(2)
-                adb_tap(*COORDS["shield_tab"], "Shield Tab")
-                time.sleep(2)
-                adb_tap(*COORDS["use_shield"], "Use 24h Shield")
-                time.sleep(2)
-                adb_tap(*COORDS["confirm"], "Confirm Shield")
-                bot_state["last_shield_time"] = now
-        time.sleep(5)
-
-threading.Thread(target=bot_worker, daemon=True).start()
-
-HTML_PAGE = '''<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lords Web Bot</title>
-<style>
-body{font-family:sans-serif;background:#0f172a;color:#fff;padding:15px;margin:0}
-.card{background:#1e293b;padding:15px;border-radius:10px;margin-bottom:15px}
-.stat{background:#0f172a;padding:10px;border-radius:6px;color:#4ade80;font-family:monospace;margin-bottom:10px}
-button{width:100%;padding:12px;border:none;border-radius:8px;font-weight:bold;color:#fff;margin-top:8px}
-.on{background:#22c55e}.off{background:#ef4444}.act{background:#3b82f6}
-.row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #334155}
-input[type=number]{width:48%;padding:8px;background:#0f172a;color:#fff;border:1px solid #475569;border-radius:6px}
-</style>
-</head>
-<body>
-<div class="card">
-<h3>Lords Mobile Web Bot</h3>
-<div class="stat" id="st">Loading...</div>
-<button class="on" onclick="up({running:true})">START BOT 24/7</button>
-<button class="off" onclick="up({running:false})">STOP BOT</button>
-</div>
-<div class="card">
-<div class="row"><span>Auto Guild Help</span><input type="checkbox" id="h" onchange="sv()"></div>
-<div class="row"><span>Auto Mystery Box</span><input type="checkbox" id="m" onchange="sv()"></div>
-<div class="row"><span>Auto 24h Shield</span><input type="checkbox" id="s" onchange="sv()"></div>
-<button class="act" onclick="sh()">Trigger Shield Now</button>
-</div>
-<div class="card">
-<input type="number" id="tx" placeholder="X (e.g. 1190)">
-<input type="number" id="ty" placeholder="Y (e.g. 560)">
-<button class="act" onclick="tp()">Tap Screen Coordinate</button>
-</div>
-<script>
-async function load(){
-let r=await fetch('/api/status'),d=await r.json();
-document.getElementById('st').innerText=(d.running?"RUNNING | ":"STOPPED | ")+d.last_action;
-document.getElementById('h').checked=d.auto_help;
-document.getElementById('m').checked=d.auto_mystery_box;
-document.getElementById('s').checked=d.auto_shield;
-}
-async function up(b){await fetch('/api/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});load();}
-function sv(){up({auto_help:document.getElementById('h').checked,auto_mystery_box:document.getElementById('m').checked,auto_shield:document.getElementById('s').checked});}
-async function sh(){await fetch('/api/shield_now',{method:'POST'});load();}
-async function tp(){await fetch('/api/tap',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({x:Number(document.getElementById('tx').value||640),y:Number(document.getElementById('ty').value||360)})});load();}
-setInterval(load,3000);load();
-</script>
-</body>
-</html>'''
-
-@app.route("/")
-def index():
-    return render_template_string(HTML_PAGE)
-
-@app.route("/api/status")
-def status():
-    return jsonify(bot_state)
-
-@app.route("/api/update", methods=["POST"])
-def update():
-    data = request.json or {}
-    for k in ["running", "auto_help", "auto_shield", "auto_mystery_box"]:
-        if k in data:
-            bot_state[k] = bool(data[k])
-    return jsonify({"ok": True})
-
-@app.route("/api/shield_now", methods=["POST"])
-def shield_now():
-    bot_state["last_shield_time"] = 0
-    bot_state["auto_shield"] = True
-    bot_state["running"] = True
-    return jsonify({"ok": True})
-
-@app.route("/api/tap", methods=["POST"])
-def tap():
-    data = request.json or {}
-    adb_tap(data.get("x", 640), data.get("y", 360), "Custom Tap")
-    return jsonify({"ok": True})
+@app.route("/api/config", methods=["POST"])
+def update_config():
+    global BOT_CONFIG
+    new_data = request.json
+    if new_data:
+        BOT_CONFIG.update(new_data)
+        return jsonify({"status": "success", "message": "Configuration updated successfully!"})
+    return jsonify({"status": "error", "message": "No data provided"}), 400
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=5000, debug=True)
